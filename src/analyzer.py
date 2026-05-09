@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-ACTIVE_WINDOW_DAYS = 10  # アクティブ判定の営業日数
+ACTIVE_WINDOW_DAYS = 5  # アクティブ判定の営業日数
 
 
 def is_business_day(d: date) -> bool:
