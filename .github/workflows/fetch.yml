@@ -1,0 +1,79 @@
+name: 年初来高値トラッカー
+
+on:
+  schedule:
+    # 毎日 15:35 JST = 06:35 UTC（月〜金）
+    # 祝日はスクリプト側で自動スキップ
+    - cron: "35 6 * * 1-5"
+
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "対象日（YYYY-MM-DD）。省略時は実行日。過去日を指定して遡り取得可能。"
+        required: false
+        default: ""
+      fallback:
+        description: "日経225フォールバックを使用（JPX CSV取得をスキップ）"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      dry_run:
+        description: "Sheetsへの書き込みをスキップしてログのみ出力"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  fetch:
+    name: 年初来高値データ取得・更新
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 のセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 依存パッケージのインストール
+        run: pip install -r requirements.txt
+
+      - name: 年初来高値トラッカー実行
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          PYTHONPATH: src
+        run: |
+          DATE_ARG=""
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            DATE_ARG="--date ${{ github.event.inputs.date }}"
+          fi
+
+          FALLBACK_ARG=""
+          if [ "${{ github.event.inputs.fallback }}" = "true" ]; then
+            FALLBACK_ARG="--fallback"
+          fi
+
+          DRY_RUN_ARG=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_ARG="--dry-run"
+          fi
+
+          python src/main.py $DATE_ARG $FALLBACK_ARG $DRY_RUN_ARG
+
+      - name: 実行結果のサマリー出力
+        if: always()
+        run: |
+          echo "## 実行完了" >> $GITHUB_STEP_SUMMARY
+          echo "- 実行日時: $(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M:%S JST')" >> $GITHUB_STEP_SUMMARY
+          echo "- 対象日: ${{ github.event.inputs.date || '自動（実行日）' }}" >> $GITHUB_STEP_SUMMARY
