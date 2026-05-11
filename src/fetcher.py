@@ -14,9 +14,9 @@ import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
-JPX_CSV_URL = (
+JPX_XLS_URL = (
     "https://www.jpx.co.jp/markets/statistics-equities/misc/"
-    "tvdivq0000001vg2-att/data_j.csv"
+    "tvdivq0000001vg2-att/data_j.xls"
 )
 
 EXCLUDE_KEYWORDS = [
@@ -77,14 +77,14 @@ def prev_business_day(d: date) -> date:
 
 
 def get_jpx_stock_list() -> Optional[pd.DataFrame]:
-    """JPX公式CSVから東証個別株一覧を取得"""
+    """JPX公式XLSから東証個別株一覧を取得"""
     try:
         headers = {"User-Agent": "Mozilla/5.0 (compatible; YTH-Tracker/1.0)"}
-        resp = requests.get(JPX_CSV_URL, headers=headers, timeout=30)
+        resp = requests.get(JPX_XLS_URL, headers=headers, timeout=30)
         resp.raise_for_status()
 
-        df = pd.read_csv(io.BytesIO(resp.content), encoding="shift_jis")
-        logger.info(f"JPX CSV取得: {len(df)} 行")
+        df = pd.read_excel(io.BytesIO(resp.content))
+        logger.info(f"JPX XLS取得: {len(df)} 行")
 
         # カラム名の動的解決
         code_col = next((c for c in df.columns if "コード" in c), None)
@@ -161,6 +161,26 @@ def _download_prices(
     combined = pd.concat(frames, axis=1)
     combined.index = combined.index.normalize()
     return combined
+
+
+def _resolve_names(codes: list[str], names: dict[str, str]) -> dict[str, str]:
+    """ダミー名（「銘柄XXXX」形式）をyfinanceの正式名称で補完する"""
+    updated = dict(names)
+    targets = [c for c in codes if updated.get(c, "").startswith("銘柄")]
+    if not targets:
+        return updated
+    logger.info(f"銘柄名をyfinanceから取得: {len(targets)} 銘柄")
+    for code in targets:
+        try:
+            info = yf.Ticker(f"{code}.T").info
+            name = info.get("longName") or info.get("shortName")
+            if name:
+                updated[code] = name
+                logger.debug(f"{code}: {name}")
+        except Exception as e:
+            logger.debug(f"{code} 銘柄名取得失敗: {e}")
+        time.sleep(0.1)
+    return updated
 
 
 def _filter_by_market_cap(
@@ -251,6 +271,10 @@ def fetch_ytd_highs(
     # 時価総額フィルタ（候補のみ対象）
     if ytd_hit_codes:
         ytd_hit_codes = _filter_by_market_cap(ytd_hit_codes, names, ytd_closes)
+
+    # ダミー名をyfinanceの正式名称で補完（フォールバック使用時）
+    if ytd_hit_codes:
+        names = _resolve_names(ytd_hit_codes, names)
 
     results = [
         {
