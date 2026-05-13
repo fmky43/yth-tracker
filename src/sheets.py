@@ -54,6 +54,7 @@ class SheetsClient:
         creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         self._gc = gspread.authorize(creds)
         self._ss = self._gc.open_by_key(spreadsheet_id)
+        logger.info(f"スプレッドシート接続: {self._ss.title} (id={spreadsheet_id})")
         self._ensure_sheets()
 
     # ------------------------------------------------------------------ #

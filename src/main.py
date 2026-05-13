@@ -119,6 +119,13 @@ def main():
 
     logger.info(f"=== 完了: {len(new_highs)} 銘柄が年初来高値を更新 ===")
 
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        sheet_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+        with open(summary_path, "a") as f:
+            f.write(f"- 年初来高値更新銘柄数: **{len(new_highs)} 銘柄**\n")
+            f.write(f"- スプレッドシート: {sheet_url}\n")
+
 
 if __name__ == "__main__":
     main()
